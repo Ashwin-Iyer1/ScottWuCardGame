@@ -1,5 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Card Target Sprint</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Use 7 or 8 playing cards and + − × ÷ to hit a random target. Every deal is solvable; time yourself and reveal the optimal solution.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -157,7 +162,8 @@ kbd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); borde
   .card.enter { animation: none; }
 }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header class="top">
     <h1 class="brand">Card Target Sprint<small id="tagline">Use any cards · hit the number · beat your time</small></h1>
@@ -595,19 +601,12 @@ document.addEventListener("keydown", function (e) {
   else if (k === "n" || k === "N") deal();
 });
 
-// ---------- boot (keeps an in-progress deal across live page updates) ----------
-function start(data) {
+// ---------- boot ----------
+(function start() {
   var saved = store.get("cts-settings", null);
   if (saved) { S.n = saved.n === 7 ? 7 : 8; S.digits = saved.digits === 3 ? 3 : 4; S.anyCards = saved.anyCards !== false; }
-  if (data && data.state && data.state.puzzle) {
-    Object.assign(S, data.state, { dealId: S.dealId + 1 });
-    render();
-    if (!S.optimal) {
-      var id = S.dealId, p = S.puzzle;
-      Solver.optimal(p.cards.map(function (c) { return c.value; }), p.target, p.solution, S.anyCards).then(function (opt) { if (id === S.dealId) { S.optimal = opt; renderSolution(); } });
-    }
-  } else deal();
-}
-window.claude?.hot?.snapshot?.(function () { return { state: Object.assign({}, S, { fresh: false }) }; });
-window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+  deal();
+})();
 </script>
+</body>
+</html>
