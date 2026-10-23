@@ -1,0 +1,613 @@
+<title>Card Target Sprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one card table. Target + stopwatch up top, the hand in the middle, poker-chip operators below, logs underneath. */
+/* Deliberately single-theme: a baize card table looks the same on any host. */
+:root {
+  color-scheme: dark;
+  --felt: #12372f;
+  --felt-deep: #0b2620;
+  --felt-line: #1f4c42;
+  --ivory: #f6f1e4;
+  --ink: #1b1a17;
+  --red-suit: #b3261e;
+  --brass: #e2b54f;
+  --brass-dim: #9f8240;
+  --chalk: #e8efe9;
+  --muted: #9fb8ae;
+  --result-ink: #1e4d8c;
+  --good: #7ee0a1;
+  --bad: #ff8a7a;
+  --chip-add: #c8372d;
+  --chip-sub: #2f5fa8;
+  --chip-mul: #23201d;
+  --chip-div: #6d3f8f;
+  --font-display: "Gloock", "Georgia", serif;
+  --font-body: "Manrope", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at 50% 20%, var(--felt) 0%, var(--felt-deep) 85%) fixed, var(--felt-deep);
+  color: var(--chalk);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.wrap {
+  max-width: 980px;
+  margin: 0 auto;
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 22px;
+}
+button { font: inherit; cursor: pointer; }
+button:focus-visible, .card:focus-visible { outline: 3px solid var(--brass); outline-offset: 3px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+.brand { font-family: var(--font-display); font-size: 26px; letter-spacing: .01em; margin: 0; line-height: 1.1; }
+.brand small { display: block; font-family: var(--font-body); font-size: 12px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-top: 4px; }
+.settings { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.seg { display: flex; align-items: center; gap: 8px; }
+.seg-label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.seg-btns { display: inline-flex; border: 1px solid var(--felt-line); border-radius: 999px; padding: 3px; background: color-mix(in srgb, var(--felt-deep) 70%, transparent); }
+.seg-btns button { border: 0; background: transparent; color: var(--chalk); padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.seg-btns button[aria-pressed="true"] { background: var(--brass); color: var(--ink); }
+
+/* scoreboard */
+.board { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; border-bottom: 1px dashed var(--felt-line); padding-bottom: 18px; }
+.target-label, .timer-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.target { font-family: var(--font-display); font-size: clamp(54px, 13vw, 104px); line-height: .95; color: var(--brass); font-variant-numeric: tabular-nums; }
+.timer-box { text-align: right; }
+.timer { font-family: var(--font-mono); font-weight: 700; font-size: clamp(30px, 7vw, 48px); font-variant-numeric: tabular-nums; line-height: 1; }
+.timer.stopped { color: var(--good); }
+.timer.void { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+.pb { font-size: 13px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+/* hand */
+.hand { display: grid; grid-template-columns: repeat(var(--n, 8), minmax(0, 1fr)); gap: 10px; min-height: 150px; align-items: end; }
+.card {
+  position: relative; aspect-ratio: 5 / 7; max-width: 100%; border: 0; padding: 0;
+  background: var(--ivory); color: var(--ink); border-radius: 10px;
+  box-shadow: 0 2px 0 #00000030, 0 8px 18px #00000040;
+  transition: transform .14s ease, box-shadow .14s ease;
+  display: grid; place-items: center; overflow: hidden;
+}
+.card.red { color: var(--red-suit); }
+.card:hover:not(:disabled) { transform: translateY(-3px); }
+.card.sel { transform: translateY(-12px); box-shadow: 0 0 0 3px var(--brass), 0 14px 22px #00000055; }
+.card:disabled { cursor: default; }
+.card .corner { position: absolute; top: 6px; left: 8px; text-align: center; line-height: 1; font-family: var(--font-display); font-size: clamp(13px, 2.4vw, 18px); }
+.card .corner span { display: block; font-size: .85em; margin-top: 2px; }
+.card .pip { font-family: var(--font-display); font-size: clamp(26px, 6vw, 46px); line-height: 1; }
+.card .val { position: absolute; bottom: 6px; right: 8px; font-family: var(--font-mono); font-size: 11px; color: #6d675c; }
+.card .key { position: absolute; top: 6px; right: 8px; font-family: var(--font-mono); font-size: 10px; color: #a59d8d; }
+.card.result { background: repeating-linear-gradient(0deg, var(--ivory) 0 13px, #e6e0cf 13px 14px); color: var(--result-ink); }
+.card.result .pip { font-family: var(--font-mono); font-weight: 700; font-size: clamp(16px, 3.6vw, 28px); letter-spacing: -.02em; }
+.card.result .from { position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-family: var(--font-mono); font-size: 10px; color: #6d675c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.card.win { box-shadow: 0 0 0 4px var(--good), 0 14px 30px #00000066; }
+.card.enter { animation: deal .28s ease-out both; }
+@keyframes deal { from { transform: translateY(-18px) rotate(-4deg); opacity: .3; } to { transform: none; opacity: 1; } }
+.dealing { color: var(--muted); grid-column: 1 / -1; text-align: center; align-self: center; }
+
+.msg { min-height: 24px; text-align: center; font-weight: 600; }
+.msg.bad { color: var(--bad); }
+.msg.good { color: var(--good); }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; }
+.chips { display: flex; gap: 14px; flex-wrap: wrap; }
+.chip {
+  --c: var(--chip-add);
+  width: 62px; height: 62px; border-radius: 50%; border: 0; color: #fff;
+  font-family: var(--font-display); font-size: 30px; line-height: 1;
+  background:
+    radial-gradient(circle, var(--c) 0 52%, transparent 53%),
+    repeating-conic-gradient(var(--c) 0 20deg, #f3eee0 20deg 40deg);
+  box-shadow: inset 0 0 0 4px var(--c), 0 4px 0 #00000055;
+  transition: transform .12s ease;
+}
+.chip[data-op="-"] { --c: var(--chip-sub); }
+.chip[data-op="*"] { --c: var(--chip-mul); }
+.chip[data-op="/"] { --c: var(--chip-div); }
+.chip:hover:not(:disabled) { transform: translateY(-2px); }
+.chip[aria-pressed="true"] { transform: translateY(-6px) scale(1.06); box-shadow: inset 0 0 0 4px var(--c), 0 0 0 3px var(--brass), 0 8px 0 #00000055; }
+.chip:disabled { opacity: .45; cursor: default; }
+.aux { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--felt-line); background: color-mix(in srgb, var(--felt-deep) 75%, transparent); color: var(--chalk); padding: 9px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; display: inline-flex; gap: 8px; align-items: center; }
+.btn:hover:not(:disabled) { border-color: var(--brass-dim); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--brass); border-color: var(--brass); color: var(--ink); }
+.btn.warn { border-color: var(--bad); color: var(--bad); }
+kbd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--felt-line); border-radius: 4px; padding: 0 4px; }
+.btn.primary kbd { color: var(--ink); border-color: #00000040; }
+
+/* panels */
+.panels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.panel { border-top: 2px solid var(--felt-line); padding-top: 10px; min-width: 0; }
+.panel h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.steps li { display: flex; gap: 10px; }
+.steps li .n { color: var(--muted); width: 1.4em; flex: none; }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+.note { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.times { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.times td { padding: 2px 0; }
+.times td:last-child { text-align: right; color: var(--muted); font-size: 12px; }
+.times tr.best td:first-child { color: var(--brass); }
+
+@media (max-width: 720px) {
+  .hand { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .panels { grid-template-columns: 1fr; }
+  .board { grid-template-columns: 1fr; }
+  .timer-box { text-align: left; }
+  .card .key { display: none; }
+  .chip { width: 56px; height: 56px; font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .chip { transition: none; }
+  .card.enter { animation: none; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">Card Target Sprint<small id="tagline">Use any cards · hit the number · beat your time</small></h1>
+    <div class="settings">
+      <div class="seg"><span class="seg-label" id="lbl-cards">Cards</span>
+        <div class="seg-btns" role="group" aria-labelledby="lbl-cards">
+          <button type="button" id="cards-7" data-cards="7">7</button>
+          <button type="button" id="cards-8" data-cards="8">8</button>
+        </div>
+      </div>
+      <div class="seg"><span class="seg-label" id="lbl-range">Target</span>
+        <div class="seg-btns" role="group" aria-labelledby="lbl-range">
+          <button type="button" id="range-3" data-range="3">100–999</button>
+          <button type="button" id="range-4" data-range="4">1000–9999</button>
+        </div>
+      </div>
+      <div class="seg"><span class="seg-label" id="lbl-rule">Use</span>
+        <div class="seg-btns" role="group" aria-labelledby="lbl-rule">
+          <button type="button" id="rule-any" data-rule="any">Any cards</button>
+          <button type="button" id="rule-all" data-rule="all">All cards</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="board" aria-live="polite">
+    <div>
+      <div class="target-label">Make</div>
+      <div class="target" id="target">····</div>
+    </div>
+    <div class="timer-box">
+      <div class="timer-label">Time</div>
+      <div class="timer" id="timer">0:00.0</div>
+      <div class="pb" id="pb">No best yet</div>
+    </div>
+  </section>
+
+  <section class="hand" id="hand" aria-label="Your cards"></section>
+  <div class="msg" id="msg" role="status"></div>
+
+  <section class="controls">
+    <div class="chips" role="group" aria-label="Operators">
+      <button type="button" class="chip" id="op-add" data-op="+" aria-label="plus" aria-pressed="false">+</button>
+      <button type="button" class="chip" id="op-sub" data-op="-" aria-label="minus" aria-pressed="false">−</button>
+      <button type="button" class="chip" id="op-mul" data-op="*" aria-label="times" aria-pressed="false">×</button>
+      <button type="button" class="chip" id="op-div" data-op="/" aria-label="divided by" aria-pressed="false">÷</button>
+    </div>
+    <div class="aux">
+      <button type="button" class="btn" id="undo">Undo <kbd>⌫</kbd></button>
+      <button type="button" class="btn" id="reset">Reset <kbd>R</kbd></button>
+      <button type="button" class="btn" id="reveal">Show solution <kbd>S</kbd></button>
+      <button type="button" class="btn primary" id="deal">New deal <kbd>N</kbd></button>
+    </div>
+  </section>
+
+  <section class="panels">
+    <div class="panel">
+      <h2>Your moves</h2>
+      <ol class="steps" id="moves"></ol>
+      <p class="empty" id="moves-empty">Tap a card, a chip, then another card. Keys: 1–8, + − * /, Esc.</p>
+    </div>
+    <div class="panel">
+      <h2>Optimal solution</h2>
+      <div id="solution"><p class="empty">Hidden. Revealing it ends the timed run.</p></div>
+    </div>
+    <div class="panel">
+      <h2 id="times-title">Your times</h2>
+      <table class="times"><tbody id="times"></tbody></table>
+      <p class="empty" id="times-empty">Solve a deal to log a time.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------- solver (runs in a Web Worker when possible) ----------
+function solverSource() {
+  // Exhaustive search over "combine two numbers" moves. Subtraction is always larger − smaller,
+  // division only when exact. `bound` caps every intermediate result; `limit` caps search nodes.
+  // With `anyCards`, any number on the table equal to the target wins, within `maxMoves` moves.
+  function search(cards, target, bound, limit, smallFirst, anyCards, maxMoves) {
+    var nodes = 0, aborted = false, failed = new Set(), steps = [];
+    if (!anyCards) maxMoves = cards.length - 1;
+    function rec(arr) {
+      var n = arr.length;
+      if (anyCards ? arr.indexOf(target) !== -1 : n === 1) return arr[0] === target || anyCards;
+      if (steps.length >= maxMoves) return false;
+      if (nodes++ > limit) { aborted = true; return false; }
+      var key = arr.slice().sort(function (x, y) { return x - y; }).join(",") + "|" + (maxMoves - steps.length);
+      if (failed.has(key)) return false;
+      var seenPairs = new Set();
+      for (var i = 0; i < n; i++) for (var j = i + 1; j < n; j++) {
+        var a = arr[i], b = arr[j];
+        if (a < b) { var t = a; a = b; b = t; }
+        var pk = a + "," + b;
+        if (seenPairs.has(pk)) continue;
+        seenPairs.add(pk);
+        var rest = [];
+        for (var k = 0; k < n; k++) if (k !== i && k !== j) rest.push(arr[k]);
+        var cands = [[a * b, "*"], [a + b, "+"], [a - b, "-"]];
+        if (b !== 0 && b !== 1 && a % b === 0) cands.push([a / b, "/"]);
+        if (smallFirst) cands.sort(function (x, y) { return x[0] - y[0]; });
+        var seenVals = new Set();
+        for (var c = 0; c < cands.length; c++) {
+          var v = cands[c][0];
+          if (v > bound || seenVals.has(v)) continue;
+          seenVals.add(v);
+          rest.push(v);
+          steps.push({ a: a, op: cands[c][1], b: b, r: v });
+          if (rec(rest)) return true;
+          steps.pop();
+          rest.pop();
+          if (aborted) return false;
+        }
+      }
+      if (!aborted) failed.add(key);
+      return false;
+    }
+    var ok = rec(cards.slice());
+    return { ok: ok, aborted: aborted, steps: ok ? steps.slice() : null };
+  }
+
+  function peakOf(steps) { return steps.reduce(function (m, s) { return Math.max(m, s.r); }, 0); }
+
+  var SUITS = ["♠", "♥", "♦", "♣"];
+  var RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+
+  function generate(n, digits, anyCards) {
+    var lo = digits === 3 ? 100 : 1000, hi = digits === 3 ? 999 : 9999;
+    for (var attempt = 0; attempt < 400; attempt++) {
+      var deck = [];
+      for (var s = 0; s < 4; s++) for (var r = 0; r < 13; r++) deck.push({ rank: RANKS[r], suit: SUITS[s], value: r + 1 });
+      for (var i = deck.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+      var hand = deck.slice(0, n);
+      var target = lo + Math.floor(Math.random() * (hi - lo + 1));
+      var res = search(hand.map(function (c) { return c.value; }), target, Infinity, 150000, false, anyCards, n - 1);
+      if (res.ok) return { cards: hand, target: target, solution: res.steps };
+    }
+    return null;
+  }
+
+  // "Optimal" = fewest moves (only varies with anyCards; otherwise it's always n−1), then the
+  // smallest possible largest intermediate number. Binary-search that cap; a search that runs
+  // out of budget counts as "not proven".
+  function optimal(values, target, known, anyCards) {
+    var best = known, proven = true, moves = known.length;
+    if (anyCards) {
+      for (var k = 1; k < known.length; k++) {
+        var r = search(values, target, Infinity, 400000, true, true, k);
+        if (r.ok) { best = r.steps; moves = k; break; }
+        if (r.aborted) proven = false;
+      }
+    }
+    var hi = peakOf(best), lo = target;
+    while (lo < hi) {
+      var mid = Math.floor((lo + hi) / 2);
+      var res = search(values, target, mid, 400000, true, anyCards, moves);
+      if (res.ok) { best = res.steps; hi = peakOf(res.steps); }
+      else { if (res.aborted) proven = false; lo = mid + 1; }
+    }
+    return { steps: best, peak: peakOf(best), proven: proven };
+  }
+
+  return { generate: generate, optimal: optimal };
+}
+
+var Solver = (function () {
+  var worker = null, pending = new Map(), seq = 0, local = solverSource();
+  try {
+    var src = "var S=(" + solverSource.toString() + ")();" +
+      "onmessage=function(e){var d=e.data,out=d.kind==='generate'?S.generate(d.n,d.digits,d.anyCards):S.optimal(d.values,d.target,d.known,d.anyCards);postMessage({id:d.id,out:out});};";
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    worker.onmessage = function (e) { var p = pending.get(e.data.id); if (p) { pending.delete(e.data.id); p(e.data.out); } };
+    worker.onerror = function () { worker = null; };
+  } catch (err) { worker = null; }
+  function call(msg) {
+    return new Promise(function (resolve) {
+      if (!worker) {
+        setTimeout(function () { resolve(msg.kind === "generate" ? local.generate(msg.n, msg.digits, msg.anyCards) : local.optimal(msg.values, msg.target, msg.known, msg.anyCards)); }, 0);
+        return;
+      }
+      msg.id = ++seq;
+      pending.set(msg.id, resolve);
+      worker.postMessage(msg);
+    });
+  }
+  return {
+    generate: function (n, digits, anyCards) { return call({ kind: "generate", n: n, digits: digits, anyCards: anyCards }); },
+    optimal: function (values, target, known, anyCards) { return call({ kind: "optimal", values: values, target: target, known: known, anyCards: anyCards }); }
+  };
+})();
+
+// ---------- game state ----------
+var OPS = { "+": "+", "-": "−", "*": "×", "/": "÷" };
+var $ = function (id) { return document.getElementById(id); };
+var store = {
+  get: function (k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
+var S = {
+  n: 8, digits: 4, anyCards: true,
+  puzzle: null,        // { cards, target, solution }
+  tiles: [], history: [], moves: [],
+  sel: null, op: null,
+  status: "dealing",   // dealing | playing | solved | revealed
+  startedAt: 0, finalMs: 0,
+  optimal: null, showSolution: false, dealId: 0, fresh: false
+};
+
+function fmt(ms) {
+  var t = Math.floor(ms / 100), tenths = t % 10, s = Math.floor(t / 10) % 60, m = Math.floor(t / 600);
+  return m + ":" + (s < 10 ? "0" : "") + s + "." + tenths;
+}
+function fmtNum(v) { return v < 0 ? "−" + Math.abs(v).toLocaleString() : v.toLocaleString(); }
+function modeKey() { return "cts-times-" + S.n + "-" + S.digits + (S.anyCards ? "-any" : ""); }
+
+function tileFromCard(c, i) { return { id: "c" + i, value: c.value, rank: c.rank, suit: c.suit, from: null }; }
+
+async function deal() {
+  var id = ++S.dealId;
+  S.status = "dealing"; S.puzzle = null; S.tiles = []; S.moves = []; S.history = [];
+  S.sel = null; S.op = null; S.optimal = null; S.showSolution = false;
+  say("Shuffling and checking the deal has a solution…");
+  render();
+  var p = await Solver.generate(S.n, S.digits, S.anyCards);
+  if (id !== S.dealId) return;
+  if (!p) { say("Couldn't find a solvable deal. Press New deal to try again.", "bad"); return; }
+  S.puzzle = p;
+  S.tiles = p.cards.map(tileFromCard);
+  S.status = "playing"; S.startedAt = Date.now(); S.finalMs = 0; S.fresh = true;
+  say("");
+  render();
+  S.fresh = false;
+  var opt = await Solver.optimal(p.cards.map(function (c) { return c.value; }), p.target, p.solution, S.anyCards);
+  if (id !== S.dealId) return;
+  S.optimal = opt;
+  renderSolution();
+}
+
+function say(text, kind) { var m = $("msg"); m.textContent = text; m.className = "msg" + (kind ? " " + kind : ""); }
+
+function canPlay() { return S.status === "playing" || S.status === "revealed"; }
+
+function tapCard(idx) {
+  if (!canPlay() || idx >= S.tiles.length) return;
+  var t = S.tiles[idx];
+  if (S.sel === null) { S.sel = t.id; say(""); render(); return; }
+  if (S.sel === t.id) { S.sel = null; S.op = null; render(); return; }
+  if (!S.op) { S.sel = t.id; render(); return; }
+  combine(S.sel, t.id);
+}
+
+function tapOp(op) {
+  if (!canPlay() || S.sel === null) { if (canPlay()) say("Pick a card first."); return; }
+  S.op = S.op === op ? null : op;
+  render();
+}
+
+function combine(aId, bId) {
+  var ai = S.tiles.findIndex(function (t) { return t.id === aId; });
+  var bi = S.tiles.findIndex(function (t) { return t.id === bId; });
+  var a = S.tiles[ai].value, b = S.tiles[bi].value, op = S.op, v;
+  if (op === "+") v = a + b;
+  else if (op === "-") v = a - b;
+  else if (op === "*") v = a * b;
+  else {
+    if (b === 0) { say("You can't divide by zero.", "bad"); S.op = null; render(); return; }
+    if (a % b !== 0) { say(fmtNum(a) + " ÷ " + fmtNum(b) + " isn't a whole number. No fractions.", "bad"); S.op = null; render(); return; }
+    v = a / b;
+  }
+  if (Object.is(v, -0)) v = 0;
+  S.history.push({ tiles: S.tiles.slice(), moves: S.moves.slice() });
+  var tile = { id: "r" + Date.now() + Math.random().toString(36).slice(2, 6), value: v, from: fmtNum(a) + " " + OPS[op] + " " + fmtNum(b), isNew: true };
+  var next = S.tiles.slice();
+  next[bi] = tile;
+  next.splice(ai, 1);
+  S.tiles = next;
+  S.moves.push({ a: a, op: op, b: b, r: v });
+  S.sel = next.length > 1 && !(S.anyCards && v === S.puzzle.target) ? tile.id : null;
+  S.op = null;
+  var hit = S.anyCards && v === S.puzzle.target;
+  if (hit || next.length === 1) finish(v);
+  else say("");
+  render();
+}
+
+function finish(v) {
+  if (v !== S.puzzle.target) { say("That's " + fmtNum(v) + ", not " + fmtNum(S.puzzle.target) + ". Undo or reset and go again.", "bad"); return; }
+  if (S.status === "revealed") { say("Solved, untimed since you looked at the solution.", "good"); return; }
+  S.status = "solved";
+  S.finalMs = Date.now() - S.startedAt;
+  var list = store.get(modeKey(), []);
+  var prevBest = list.length ? Math.min.apply(null, list.map(function (x) { return x.ms; })) : Infinity;
+  list.unshift({ ms: S.finalMs, target: S.puzzle.target, at: Date.now() });
+  store.set(modeKey(), list.slice(0, 50));
+  say(S.finalMs < prevBest ? "Solved in " + fmt(S.finalMs) + ". New best!" : "Solved in " + fmt(S.finalMs) + ".", "good");
+}
+
+function undo() {
+  if (!canPlay() && S.status !== "solved") return;
+  if (S.status === "solved" || !S.history.length) return;
+  var h = S.history.pop();
+  S.tiles = h.tiles; S.moves = h.moves; S.sel = null; S.op = null; say(""); render();
+}
+function reset() {
+  if (!canPlay() || !S.history.length) return;
+  S.tiles = S.puzzle.cards.map(tileFromCard); S.moves = []; S.history = []; S.sel = null; S.op = null; say(""); render();
+}
+
+var revealArmed = 0;
+function reveal() {
+  if (!S.puzzle || S.showSolution) return;
+  if (S.status === "playing" && Date.now() - revealArmed > 3000) {
+    revealArmed = Date.now();
+    $("reveal").textContent = "Tap again to reveal";
+    $("reveal").classList.add("warn");
+    setTimeout(function () { if (!S.showSolution) renderControls(); }, 3000);
+    return;
+  }
+  if (S.status === "playing") { S.status = "revealed"; S.finalMs = Date.now() - S.startedAt; }
+  S.showSolution = true;
+  render();
+}
+
+// ---------- rendering ----------
+function cardHTML(t, i) {
+  var cls = "card" + (t.suit ? (t.suit === "♥" || t.suit === "♦" ? " red" : "") : " result") + (S.sel === t.id ? " sel" : "") +
+    ((S.fresh || t.isNew) ? " enter" : "") + (S.status === "solved" && t.value === S.puzzle.target && !t.suit ? " win" : "");
+  var label = t.suit ? (t.rank + " of " + t.suit + ", value " + t.value) : ("result " + t.value + " from " + t.from);
+  var inner = t.suit
+    ? '<span class="corner">' + t.rank + "<span>" + t.suit + "</span></span>" +
+      '<span class="pip">' + (t.value > 10 || t.value === 1 ? t.rank : t.suit) + "</span>" +
+      (t.value > 10 || t.value === 1 ? '<span class="val">=' + t.value + "</span>" : "")
+    : '<span class="pip">' + fmtNum(t.value) + '</span><span class="from">' + t.from + "</span>";
+  return '<button type="button" class="' + cls + '" data-idx="' + i + '" aria-pressed="' + (S.sel === t.id) + '" aria-label="' + label + '"' +
+    (canPlay() ? "" : " disabled") + ">" + inner + (S.tiles.length > 1 ? '<span class="key">' + (i + 1) + "</span>" : "") + "</button>";
+}
+
+function render() {
+  document.querySelectorAll("[data-cards]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.cards === S.n)); });
+  document.querySelectorAll("[data-range]").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.range === S.digits)); });
+  document.querySelectorAll("[data-rule]").forEach(function (b) { b.setAttribute("aria-pressed", String((b.dataset.rule === "any") === S.anyCards)); });
+  $("target").textContent = S.puzzle ? S.puzzle.target.toLocaleString() : "····";
+  var hand = $("hand");
+  hand.style.setProperty("--n", S.puzzle ? S.n : 8);
+  hand.innerHTML = S.status === "dealing" ? '<p class="dealing">Dealing…</p>' : S.tiles.map(cardHTML).join("");
+  S.tiles.forEach(function (t) { delete t.isNew; });
+  document.querySelectorAll(".chip").forEach(function (c) {
+    c.setAttribute("aria-pressed", String(S.op === c.dataset.op));
+    c.disabled = !canPlay() || S.sel === null;
+  });
+  $("moves").innerHTML = S.moves.map(function (m, i) {
+    return '<li><span class="n">' + (i + 1) + "</span>" + fmtNum(m.a) + " " + OPS[m.op] + " " + fmtNum(m.b) + " = " + fmtNum(m.r) + "</li>";
+  }).join("");
+  $("moves-empty").hidden = S.moves.length > 0;
+  renderControls();
+  renderSolution();
+  renderTimes();
+  tick();
+}
+
+function renderControls() {
+  $("undo").disabled = !canPlay() || !S.history.length;
+  $("reset").disabled = !canPlay() || !S.history.length;
+  var r = $("reveal");
+  r.disabled = !S.puzzle || S.showSolution;
+  r.classList.remove("warn");
+  r.innerHTML = "Show solution <kbd>S</kbd>";
+}
+
+function renderSolution() {
+  var box = $("solution");
+  if (!S.showSolution) { box.innerHTML = '<p class="empty">Hidden. Revealing it ends the timed run.</p>'; return; }
+  if (!S.optimal) { box.innerHTML = '<p class="empty">Finding the cleanest solution…</p>'; return; }
+  var steps = S.optimal.steps;
+  box.innerHTML = '<ol class="steps">' + steps.map(function (m, i) {
+    return '<li><span class="n">' + (i + 1) + "</span>" + fmtNum(m.a) + " " + OPS[m.op] + " " + fmtNum(m.b) + " = " + fmtNum(m.r) + "</li>";
+  }).join("") + "</ol>" +
+    '<p class="note">' + (S.anyCards
+      ? "Fewest moves first (" + steps.length + " of " + S.puzzle.cards.length + " cards' worth), then the smallest numbers: the biggest you ever hold is "
+      : "Every solution takes " + steps.length + " moves, so this one keeps the numbers small: the biggest number you ever hold is ") +
+    S.optimal.peak.toLocaleString() + (S.optimal.proven ? ", the best possible for this deal." : ". That's the best found within the search budget.") + "</p>";
+}
+
+function renderTimes() {
+  var list = store.get(modeKey(), []);
+  $("times-title").textContent = "Your times · " + S.n + " cards, " + (S.digits === 3 ? "3" : "4") + "-digit, " + (S.anyCards ? "any cards" : "all cards");
+  $("tagline").textContent = (S.anyCards ? "Use any cards" : "Use every card") + " · hit the number · beat your time";
+  var best = list.length ? Math.min.apply(null, list.map(function (x) { return x.ms; })) : null;
+  $("pb").textContent = best === null ? "No best yet" : "Best " + fmt(best);
+  $("times").innerHTML = list.slice(0, 8).map(function (x) {
+    return '<tr class="' + (x.ms === best ? "best" : "") + '"><td>' + fmt(x.ms) + "</td><td>make " + x.target.toLocaleString() + "</td></tr>";
+  }).join("");
+  $("times-empty").hidden = list.length > 0;
+}
+
+function tick() {
+  var el = $("timer");
+  var ms = S.status === "playing" ? Date.now() - S.startedAt : (S.status === "dealing" ? 0 : S.finalMs);
+  el.textContent = fmt(ms);
+  el.className = "timer" + (S.status === "solved" ? " stopped" : S.status === "revealed" ? " void" : "");
+}
+(function loop() { if (S.status === "playing") tick(); requestAnimationFrame(loop); })();
+
+// ---------- input ----------
+$("hand").addEventListener("click", function (e) { var c = e.target.closest(".card"); if (c) tapCard(+c.dataset.idx); });
+document.querySelectorAll(".chip").forEach(function (c) { c.addEventListener("click", function () { tapOp(c.dataset.op); }); });
+$("undo").addEventListener("click", undo);
+$("reset").addEventListener("click", reset);
+$("reveal").addEventListener("click", reveal);
+$("deal").addEventListener("click", deal);
+document.querySelectorAll("[data-cards]").forEach(function (b) {
+  b.addEventListener("click", function () { if (S.n !== +b.dataset.cards) { S.n = +b.dataset.cards; saveSettings(); deal(); } });
+});
+document.querySelectorAll("[data-range]").forEach(function (b) {
+  b.addEventListener("click", function () { if (S.digits !== +b.dataset.range) { S.digits = +b.dataset.range; saveSettings(); deal(); } });
+});
+document.querySelectorAll("[data-rule]").forEach(function (b) {
+  b.addEventListener("click", function () { var any = b.dataset.rule === "any"; if (S.anyCards !== any) { S.anyCards = any; saveSettings(); deal(); } });
+});
+function saveSettings() { store.set("cts-settings", { n: S.n, digits: S.digits, anyCards: S.anyCards }); }
+
+document.addEventListener("keydown", function (e) {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  var k = e.key;
+  if (/^[1-8]$/.test(k)) { tapCard(+k - 1); e.preventDefault(); }
+  else if (k === "+" || k === "=") tapOp("+");
+  else if (k === "-") tapOp("-");
+  else if (k === "*" || k === "x" || k === "X") tapOp("*");
+  else if (k === "/") { tapOp("/"); e.preventDefault(); }
+  else if (k === "Backspace") { undo(); e.preventDefault(); }
+  else if (k === "Escape") { S.sel = null; S.op = null; render(); }
+  else if (k === "r" || k === "R") reset();
+  else if (k === "s" || k === "S") reveal();
+  else if (k === "n" || k === "N") deal();
+});
+
+// ---------- boot (keeps an in-progress deal across live page updates) ----------
+function start(data) {
+  var saved = store.get("cts-settings", null);
+  if (saved) { S.n = saved.n === 7 ? 7 : 8; S.digits = saved.digits === 3 ? 3 : 4; S.anyCards = saved.anyCards !== false; }
+  if (data && data.state && data.state.puzzle) {
+    Object.assign(S, data.state, { dealId: S.dealId + 1 });
+    render();
+    if (!S.optimal) {
+      var id = S.dealId, p = S.puzzle;
+      Solver.optimal(p.cards.map(function (c) { return c.value; }), p.target, p.solution, S.anyCards).then(function (opt) { if (id === S.dealId) { S.optimal = opt; renderSolution(); } });
+    }
+  } else deal();
+}
+window.claude?.hot?.snapshot?.(function () { return { state: Object.assign({}, S, { fresh: false }) }; });
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
